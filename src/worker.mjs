@@ -1,7 +1,7 @@
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"Content-Type","Access-Control-Allow-Methods":"GET,POST,OPTIONS"};
 const json=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...cors}});
 const fail=(m,s=400)=>json({error:m},s),now=()=>Math.floor(Date.now()/1000),norm=x=>String(x??"").trim();
-async function hash(p,s){const e=new TextEncoder(),k=await crypto.subtle.importKey("raw",e.encode(p),"PBKDF2",false,["deriveBits"]),b=await crypto.subtle.deriveBits({name:"PBKDF2",salt:e.encode(s),iterations:210000,hash:"SHA-256"},k,256);return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+async function hash(p,s){const e=new TextEncoder(),k=await crypto.subtle.importKey("raw",e.encode(p),"PBKDF2",false,["deriveBits"]),b=await crypto.subtle.deriveBits({name:"PBKDF2",salt:e.encode(s),iterations:100000,hash:"SHA-256"},k,256);return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
 async function sha(x){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(x));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
 async function current(req,env){const c=req.headers.get("Cookie")||"",t=c.match(/scsa_session=([^;]+)/)?.[1];if(!t)return null;return await env.DB.prepare("SELECT u.id,u.name,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.status='active'").bind(await sha(decodeURIComponent(t)),now()).first()}
 const setCookie=(v,a)=>`scsa_session=${encodeURIComponent(v)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${a}`;
