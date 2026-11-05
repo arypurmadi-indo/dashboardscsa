@@ -511,6 +511,10 @@ export default {
         });
       }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> f3899f6894e12f8aa1a7e1c110d18d024f597180
       /* =========================================
          API DASHBOARD PUBLIK - TANPA LOGIN
          Hanya mengembalikan data agregat, tanpa
@@ -645,6 +649,11 @@ export default {
         return json({ groups });
       }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> f926a0190a721ae585050d273f9b7beb8d4691bc
+>>>>>>> f3899f6894e12f8aa1a7e1c110d18d024f597180
       /* OTORISASI MANAGER */
 
       const u = await role(req, env);
