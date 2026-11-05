@@ -511,58 +511,42 @@ export default {
         });
       }
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> f3899f6894e12f8aa1a7e1c110d18d024f597180
       /* =========================================
-         API DASHBOARD PUBLIK - TANPA LOGIN
-         Hanya mengembalikan data agregat, tanpa
-         nama, email, atau identitas peserta.
+         API DASHBOARD PUBLIK (TANPA LOGIN)
+         Hanya mengirim data agregat, tanpa email/nama peserta.
       ========================================= */
 
-      if (path === "/api/public/overview") {
-        const latest = await env.DB.prepare(
-          "SELECT b.* FROM import_batches b JOIN (SELECT course_key,MAX(uploaded_at) t FROM import_batches GROUP BY course_key) x ON x.course_key=b.course_key AND x.t=b.uploaded_at"
+      if (path === "/api/public/overview" && req.method === "GET") {
+        const d = await env.DB.prepare(
+          "SELECT p.email,p.group_name,COALESCE(a.total_activities,0) total,COALESCE(a.completed_activities,0) completed FROM import_batches b JOIN (SELECT course_key,MAX(uploaded_at) t FROM import_batches GROUP BY course_key) x ON x.course_key=b.course_key AND x.t=b.uploaded_at JOIN imported_participants p ON p.batch_id=b.id LEFT JOIN imported_progress a ON a.batch_id=p.batch_id AND a.email=p.email"
         ).all();
 
-        const batches = latest.results || [];
-        const participantEmails = new Set();
-        const districtEmails = new Map();
+        const participants = new Set();
+        const districts = new Set();
         let total = 0;
         let completed = 0;
 
-        for (const batch of batches) {
-          const ps = await env.DB.prepare(
-            "SELECT email,group_name FROM imported_participants WHERE batch_id=?"
-          ).bind(batch.id).all();
-
-          for (const p of ps.results || []) {
-            participantEmails.add(p.email);
-            const district = norm(p.group_name) || "Belum Terpetakan";
-            if (!districtEmails.has(district)) {
-              districtEmails.set(district, new Set());
-            }
-            districtEmails.get(district).add(p.email);
-          }
-
-          const progress = await env.DB.prepare(
-            "SELECT COALESCE(SUM(total_activities),0) total,COALESCE(SUM(completed_activities),0) completed FROM imported_progress WHERE batch_id=?"
-          ).bind(batch.id).first();
-
-          total += Number(progress?.total || 0);
-          completed += Number(progress?.completed || 0);
+        for (const r of d.results || []) {
+          if (r.email) participants.add(r.email);
+          const group = norm(r.group_name);
+          if (group) districts.add(group);
+          total += Number(r.total || 0);
+          completed += Number(r.completed || 0);
         }
+
+        const uploaded = await env.DB.prepare(
+          "SELECT COUNT(DISTINCT course_key) n FROM import_batches"
+        ).first();
 
         return json({
           metrics: {
-            participants: participantEmails.size,
-            courses: batches.length,
+            participants: participants.size,
+            courses: Number(uploaded?.n || 0),
             totalCourses: COURSE_LIST.length,
-            districts: [...districtEmails.keys()].filter(x => x !== "Belum Terpetakan").length,
+            districts: districts.size,
+            completion: total ? Math.round(completed * 100 / total) : 0,
             completed,
-            total,
-            completion: total ? Math.round(completed * 100 / total) : 0
+            total
           },
           lastSync: await env.DB.prepare(
             "SELECT created_at,message FROM sync_logs WHERE source='csv-import' ORDER BY created_at DESC LIMIT 1"
@@ -570,90 +554,61 @@ export default {
         });
       }
 
-      if (path === "/api/public/courses") {
+      if (path === "/api/public/courses" && req.method === "GET") {
         const latest = await env.DB.prepare(
           "SELECT b.* FROM import_batches b JOIN (SELECT course_key,MAX(uploaded_at) t FROM import_batches GROUP BY course_key) x ON x.course_key=b.course_key AND x.t=b.uploaded_at"
         ).all();
-
-        const byKey = new Map((latest.results || []).map(b => [b.course_key, b]));
+        const byCourse = new Map((latest.results || []).map(b => [b.course_key, b]));
         const courses = [];
 
         for (const [course_key, course_name] of COURSE_LIST) {
-          const batch = byKey.get(course_key);
-          if (!batch) {
-            courses.push({
-              course_key, course_name, uploaded: false,
-              profile_count: 0, total: 0, completed: 0, completion: 0
-            });
+          const b = byCourse.get(course_key);
+          if (!b) {
+            courses.push({ course_key, course_name, uploaded: false, profile_count: 0, total: 0, completed: 0, completion: 0 });
             continue;
           }
-
-          const stats = await env.DB.prepare(
+          const a = await env.DB.prepare(
             "SELECT COALESCE(SUM(total_activities),0) total,COALESCE(SUM(completed_activities),0) completed FROM imported_progress WHERE batch_id=?"
-          ).bind(batch.id).first();
-
+          ).bind(b.id).first();
+          const total = Number(a?.total || 0);
+          const completed = Number(a?.completed || 0);
           courses.push({
             course_key, course_name, uploaded: true,
-            profile_count: Number(batch.matched_count || batch.profile_count || 0),
-            uploaded_at: batch.uploaded_at,
-            total: Number(stats?.total || 0),
-            completed: Number(stats?.completed || 0),
-            completion: stats?.total
-              ? Math.round(stats.completed * 100 / stats.total)
-              : 0
+            profile_count: Number(b.profile_count || 0),
+            total, completed,
+            completion: total ? Math.round(completed * 100 / total) : 0
           });
         }
-
         return json({ courses });
       }
 
-      if (path === "/api/public/groups") {
-        const url = new URL(req.url);
-        const courseKey = norm(url.searchParams.get("course"));
-        const validCourse = !courseKey || COURSE_LIST.some(x => x[0] === courseKey);
-        if (!validCourse) return fail("Filter pelatihan tidak valid.");
+      if (path === "/api/public/groups" && req.method === "GET") {
+        const selectedCourse = norm(new URL(req.url).searchParams.get("course"));
+        let sql = "SELECT p.email,p.group_name,COALESCE(a.total_activities,0) total,COALESCE(a.completed_activities,0) completed FROM import_batches b JOIN (SELECT course_key,MAX(uploaded_at) t FROM import_batches GROUP BY course_key) x ON x.course_key=b.course_key AND x.t=b.uploaded_at JOIN imported_participants p ON p.batch_id=b.id LEFT JOIN imported_progress a ON a.batch_id=p.batch_id AND a.email=p.email";
+        const params = [];
+        if (selectedCourse) { sql += " WHERE b.course_key=?"; params.push(selectedCourse); }
+        const d = await env.DB.prepare(sql).bind(...params).all();
+        const grouped = new Map();
 
-        const sql = `
-          SELECT
-            p.group_name,
-            COUNT(DISTINCT p.email) participants,
-            COALESCE(SUM(a.total_activities),0) total,
-            COALESCE(SUM(a.completed_activities),0) completed
-          FROM import_batches b
-          JOIN (
-            SELECT course_key,MAX(uploaded_at) t
-            FROM import_batches GROUP BY course_key
-          ) latest ON latest.course_key=b.course_key AND latest.t=b.uploaded_at
-          JOIN imported_participants p ON p.batch_id=b.id
-          LEFT JOIN imported_progress a
-            ON a.batch_id=p.batch_id AND a.email=p.email
-          ${courseKey ? "WHERE b.course_key=?" : ""}
-          GROUP BY p.group_name
-          ORDER BY p.group_name
-        `;
-        const query = env.DB.prepare(sql);
-        const result = courseKey
-          ? await query.bind(courseKey).all()
-          : await query.all();
+        for (const r of d.results || []) {
+          const name = norm(r.group_name) || "Belum Terpetakan";
+          if (!grouped.has(name)) grouped.set(name, { name, emails: new Set(), total: 0, completed: 0 });
+          const g = grouped.get(name);
+          if (r.email) g.emails.add(r.email);
+          g.total += Number(r.total || 0);
+          g.completed += Number(r.completed || 0);
+        }
 
-        const groups = (result.results || []).map(x => ({
-          name: norm(x.group_name) || "Belum Terpetakan",
-          participants: Number(x.participants || 0),
-          total: Number(x.total || 0),
-          completed: Number(x.completed || 0),
-          completion: x.total
-            ? Math.round(x.completed * 100 / x.total)
-            : 0
-        }));
-
+        const groups = [...grouped.values()].map(g => ({
+          name: g.name,
+          participants: g.emails.size,
+          total: g.total,
+          completed: g.completed,
+          completion: g.total ? Math.round(g.completed * 100 / g.total) : 0
+        })).sort((a,b) => a.name.localeCompare(b.name, "id"));
         return json({ groups });
       }
 
-<<<<<<< HEAD
-=======
-=======
->>>>>>> f926a0190a721ae585050d273f9b7beb8d4691bc
->>>>>>> f3899f6894e12f8aa1a7e1c110d18d024f597180
       /* OTORISASI MANAGER */
 
       const u = await role(req, env);
