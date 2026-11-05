@@ -511,6 +511,143 @@ export default {
         });
       }
 
+<<<<<<< HEAD
+      /* =========================================
+         API DASHBOARD PUBLIK - TANPA LOGIN
+         Hanya mengembalikan data agregat, tanpa
+         nama, email, atau identitas peserta.
+      ========================================= */
+
+      if (path === "/api/public/overview") {
+        const latest = await env.DB.prepare(
+          "SELECT b.* FROM import_batches b JOIN (SELECT course_key,MAX(uploaded_at) t FROM import_batches GROUP BY course_key) x ON x.course_key=b.course_key AND x.t=b.uploaded_at"
+        ).all();
+
+        const batches = latest.results || [];
+        const participantEmails = new Set();
+        const districtEmails = new Map();
+        let total = 0;
+        let completed = 0;
+
+        for (const batch of batches) {
+          const ps = await env.DB.prepare(
+            "SELECT email,group_name FROM imported_participants WHERE batch_id=?"
+          ).bind(batch.id).all();
+
+          for (const p of ps.results || []) {
+            participantEmails.add(p.email);
+            const district = norm(p.group_name) || "Belum Terpetakan";
+            if (!districtEmails.has(district)) {
+              districtEmails.set(district, new Set());
+            }
+            districtEmails.get(district).add(p.email);
+          }
+
+          const progress = await env.DB.prepare(
+            "SELECT COALESCE(SUM(total_activities),0) total,COALESCE(SUM(completed_activities),0) completed FROM imported_progress WHERE batch_id=?"
+          ).bind(batch.id).first();
+
+          total += Number(progress?.total || 0);
+          completed += Number(progress?.completed || 0);
+        }
+
+        return json({
+          metrics: {
+            participants: participantEmails.size,
+            courses: batches.length,
+            totalCourses: COURSE_LIST.length,
+            districts: [...districtEmails.keys()].filter(x => x !== "Belum Terpetakan").length,
+            completed,
+            total,
+            completion: total ? Math.round(completed * 100 / total) : 0
+          },
+          lastSync: await env.DB.prepare(
+            "SELECT created_at,message FROM sync_logs WHERE source='csv-import' ORDER BY created_at DESC LIMIT 1"
+          ).first()
+        });
+      }
+
+      if (path === "/api/public/courses") {
+        const latest = await env.DB.prepare(
+          "SELECT b.* FROM import_batches b JOIN (SELECT course_key,MAX(uploaded_at) t FROM import_batches GROUP BY course_key) x ON x.course_key=b.course_key AND x.t=b.uploaded_at"
+        ).all();
+
+        const byKey = new Map((latest.results || []).map(b => [b.course_key, b]));
+        const courses = [];
+
+        for (const [course_key, course_name] of COURSE_LIST) {
+          const batch = byKey.get(course_key);
+          if (!batch) {
+            courses.push({
+              course_key, course_name, uploaded: false,
+              profile_count: 0, total: 0, completed: 0, completion: 0
+            });
+            continue;
+          }
+
+          const stats = await env.DB.prepare(
+            "SELECT COALESCE(SUM(total_activities),0) total,COALESCE(SUM(completed_activities),0) completed FROM imported_progress WHERE batch_id=?"
+          ).bind(batch.id).first();
+
+          courses.push({
+            course_key, course_name, uploaded: true,
+            profile_count: Number(batch.matched_count || batch.profile_count || 0),
+            uploaded_at: batch.uploaded_at,
+            total: Number(stats?.total || 0),
+            completed: Number(stats?.completed || 0),
+            completion: stats?.total
+              ? Math.round(stats.completed * 100 / stats.total)
+              : 0
+          });
+        }
+
+        return json({ courses });
+      }
+
+      if (path === "/api/public/groups") {
+        const url = new URL(req.url);
+        const courseKey = norm(url.searchParams.get("course"));
+        const validCourse = !courseKey || COURSE_LIST.some(x => x[0] === courseKey);
+        if (!validCourse) return fail("Filter pelatihan tidak valid.");
+
+        const sql = `
+          SELECT
+            p.group_name,
+            COUNT(DISTINCT p.email) participants,
+            COALESCE(SUM(a.total_activities),0) total,
+            COALESCE(SUM(a.completed_activities),0) completed
+          FROM import_batches b
+          JOIN (
+            SELECT course_key,MAX(uploaded_at) t
+            FROM import_batches GROUP BY course_key
+          ) latest ON latest.course_key=b.course_key AND latest.t=b.uploaded_at
+          JOIN imported_participants p ON p.batch_id=b.id
+          LEFT JOIN imported_progress a
+            ON a.batch_id=p.batch_id AND a.email=p.email
+          ${courseKey ? "WHERE b.course_key=?" : ""}
+          GROUP BY p.group_name
+          ORDER BY p.group_name
+        `;
+        const query = env.DB.prepare(sql);
+        const result = courseKey
+          ? await query.bind(courseKey).all()
+          : await query.all();
+
+        const groups = (result.results || []).map(x => ({
+          name: norm(x.group_name) || "Belum Terpetakan",
+          participants: Number(x.participants || 0),
+          total: Number(x.total || 0),
+          completed: Number(x.completed || 0),
+          completion: x.total
+            ? Math.round(x.completed * 100 / x.total)
+            : 0
+        }));
+
+        return json({ groups });
+      }
+
+=======
+>>>>>>> f926a0190a721ae585050d273f9b7beb8d4691bc
       /* OTORISASI MANAGER */
 
       const u = await role(req, env);
