@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#102a43">
+<title>Dashboard Publik SCSA</title>
+<style>
+:root{--navy:#102a43;--blue:#2878c7;--teal:#159a83;--gold:#e7a83e;--purple:#8768c5;--ink:#172b4d;--muted:#6b7c93;--line:#e7edf3;--bg:#f4f7fb;--card:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
+header{background:linear-gradient(120deg,#102a43,#174e76);color:white;padding:30px max(22px,calc((100% - 1180px)/2))}
+.brand{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#b9d8ef;font-weight:800}.headrow{display:flex;justify-content:space-between;align-items:end;gap:20px;flex-wrap:wrap}h1{font-size:clamp(25px,4vw,36px);margin:9px 0 6px}.sub{margin:0;color:#d5e5f2;font-size:14px}.live{border:1px solid #ffffff55;border-radius:999px;padding:8px 12px;font-size:12px;color:#e9f5ff}
+main{max-width:1180px;margin:25px auto;padding:0 20px 48px}.toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:18px}.filters{display:flex;gap:10px;flex-wrap:wrap}select{background:white;border:1px solid var(--line);border-radius:10px;padding:11px 14px;color:var(--ink);min-width:210px;font:inherit}.updated{font-size:12px;color:var(--muted)}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}.metric,.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 4px 18px #16324f08}.metric{padding:18px}.metric-label{font-size:12px;color:var(--muted);font-weight:650}.metric-value{font-size:30px;font-weight:800;letter-spacing:-1px;margin:7px 0 3px}.metric-note{font-size:11px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{padding:20px;min-width:0}.panel h2{font-size:16px;margin:0 0 4px}.hint{font-size:12px;color:var(--muted);margin:0 0 18px}.donut-wrap{display:flex;align-items:center;gap:24px;min-height:210px;justify-content:center;flex-wrap:wrap}.donut{width:170px;height:170px;border-radius:50%;display:grid;place-items:center;position:relative}.donut:after{content:"";position:absolute;width:112px;height:112px;border-radius:50%;background:white}.donut-center{z-index:1;text-align:center}.donut-center strong{font-size:27px;display:block}.donut-center span{font-size:11px;color:var(--muted)}.legend{display:grid;gap:11px;font-size:12px}.legend span{display:flex;align-items:center;gap:8px}.dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+.pie{width:170px;height:170px;border-radius:50%;flex:none}.pie-wrap{display:flex;align-items:center;gap:22px;justify-content:center;flex-wrap:wrap;min-height:210px}.bars{display:grid;gap:13px}.barline{display:grid;grid-template-columns:minmax(110px,1fr) 2fr 42px;gap:10px;align-items:center;font-size:12px}.barname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.track{height:10px;background:#edf1f6;border-radius:99px;overflow:hidden}.fill{height:100%;border-radius:99px;background:var(--blue)}.pct{text-align:right;font-weight:700}
+.district-list{display:grid;gap:13px}.district-top{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-bottom:6px}.district-top b{font-weight:700}.district-top span{color:var(--muted)}
+.table-panel{margin-top:16px}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px;min-width:650px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:700;background:#fafbfd}td.num,th.num{text-align:right}.status{padding:5px 8px;border-radius:99px;background:#eaf6f2;color:#13795f;font-size:10px;font-weight:700}.status.off{background:#f0f2f5;color:#7b8794}
+.empty,.loading{color:var(--muted);font-size:13px;text-align:center;padding:30px}.foot{text-align:center;color:#8795a7;font-size:11px;padding:22px}
+@media(max-width:800px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}.panel{padding:16px}main{margin-top:18px}}
+@media(max-width:420px){.metrics{gap:9px}.metric{padding:13px}.metric-value{font-size:25px}.barline{grid-template-columns:105px 1fr 36px;gap:7px}.donut,.pie{width:145px;height:145px}.donut:after{width:96px;height:96px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">SCSA · Learning Analytics</div>
+  <div class="headrow">
+    <div><h1>Dashboard Publik SCSA</h1><p class="sub">Monitoring partisipasi dan progres pembelajaran 13 pelatihan</p></div>
+    <div class="live">● Data diperbarui dari sistem</div>
+  </div>
+</header>
+<main>
+  <div class="toolbar">
+    <div class="filters">
+      <select id="courseFilter" aria-label="Pilih pelatihan"><option value="">Semua pelatihan</option></select>
+      <select id="districtFilter" aria-label="Pilih kecamatan"><option value="">Semua kecamatan</option></select>
+    </div>
+    <div class="updated" id="updated">Memuat data...</div>
+  </div>
+  <section class="metrics">
+    <article class="metric"><div class="metric-label">Total Peserta Unik</div><div class="metric-value" id="mParticipants">—</div><div class="metric-note">Lintas pelatihan yang telah diunggah</div></article>
+    <article class="metric"><div class="metric-label">Pelatihan Tersedia</div><div class="metric-value" id="mCourses">—</div><div class="metric-note">Dari 13 pelatihan SCSA</div></article>
+    <article class="metric"><div class="metric-label">Jumlah Kecamatan</div><div class="metric-value" id="mDistricts">—</div><div class="metric-note">Berdasarkan kolom Groups</div></article>
+    <article class="metric"><div class="metric-label">Penyelesaian Aktivitas</div><div class="metric-value" id="mCompletion">—</div><div class="metric-note" id="mActivity">Aktivitas selesai dari total aktivitas</div></article>
+  </section>
+  <section class="grid">
+    <article class="panel"><h2>Progres Penyelesaian Aktivitas</h2><p class="hint">Perbandingan aktivitas selesai dan belum selesai.</p><div class="donut-wrap"><div class="donut" id="donut"><div class="donut-center"><strong id="donutPct">0%</strong><span>terselesaikan</span></div></div><div class="legend"><span><i class="dot" style="background:#159a83"></i> Selesai <b id="doneLegend">0</b></span><span><i class="dot" style="background:#e8edf3"></i> Belum selesai <b id="pendingLegend">0</b></span></div></div></article>
+    <article class="panel"><h2>Distribusi Peserta per Kecamatan</h2><p class="hint">Proporsi peserta berdasarkan kelompok kecamatan.</p><div class="pie-wrap"><div class="pie" id="pie"></div><div class="legend" id="pieLegend"></div></div></article>
+    <article class="panel"><h2>Perbandingan 13 Pelatihan</h2><p class="hint">Persentase penyelesaian aktivitas pada setiap pelatihan.</p><div class="bars" id="courseBars"><div class="loading">Memuat grafik...</div></div></article>
+    <article class="panel"><h2>Progres per Kecamatan</h2><p class="hint">Rata-rata penyelesaian aktivitas peserta per kecamatan.</p><div class="district-list" id="districtBars"><div class="loading">Memuat grafik...</div></div></article>
+  </section>
+  <section class="panel table-panel"><h2>Ringkasan 13 Pelatihan</h2><p class="hint">Status unggahan dan progres masing-masing pelatihan.</p><div class="table-scroll"><table><thead><tr><th>Pelatihan</th><th>Status Data</th><th class="num">Peserta</th><th class="num">Aktivitas Selesai</th><th class="num">Progres</th></tr></thead><tbody id="courseTable"><tr><td colspan="5" class="empty">Memuat data...</td></tr></tbody></table></div></section>
+  <div class="foot">SCSA Learning Analytics · Informasi yang ditampilkan merupakan data agregat dan tidak menampilkan identitas pribadi peserta.</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const fmt=n=>Number(n||0).toLocaleString('id-ID');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const palette=['#2878c7','#159a83','#e7a83e','#8768c5','#dc7185','#4e9eae','#7d9b54','#b77c4c','#6574a8','#d18a37'];
+let courses=[], groups=[], overview=null;
+async function get(url){const r=await fetch(url,{headers:{'Accept':'application/json'}});if(!r.ok)throw new Error('Gagal mengambil data ('+r.status+').');return r.json();}
+function setText(id,v){$(id).textContent=v;}
+function drawDonut(m){const pct=Number(m.completion||0);$('donut').style.background=`conic-gradient(#159a83 ${pct}%,#e8edf3 0)`;setText('donutPct',pct+'%');setText('doneLegend',fmt(m.completed));setText('pendingLegend',fmt(Math.max(0,Number(m.total||0)-Number(m.completed||0))));}
+function drawPie(data){const rows=data.filter(x=>x.name!=='Belum Terpetakan'&&x.participants>0).sort((a,b)=>b.participants-a.participants);const top=rows.slice(0,7);const rest=rows.slice(7).reduce((n,x)=>n+x.participants,0);if(rest)top.push({name:'Kecamatan lainnya',participants:rest});const total=top.reduce((n,x)=>n+x.participants,0);let cursor=0;const stops=top.map((x,i)=>{const start=cursor;cursor+=total?x.participants/total*100:0;return `${palette[i%palette.length]} ${start}% ${cursor}%`;});$('pie').style.background=stops.length?`conic-gradient(${stops.join(',')})`:'#e8edf3';$('pieLegend').innerHTML=top.length?top.map((x,i)=>`<span><i class="dot" style="background:${palette[i%palette.length]}"></i>${esc(x.name)} <b>${fmt(x.participants)}</b></span>`).join(''):'<span>Belum ada data kecamatan</span>';}
+function drawCourses(data){$('courseBars').innerHTML=data.map(c=>`<div class="barline"><div class="barname" title="${esc(c.course_name)}">${esc(c.course_name)}</div><div class="track"><div class="fill" style="width:${Math.max(0,Math.min(100,c.completion||0))}%"></div></div><div class="pct">${c.uploaded?c.completion+'%':'—'}</div></div>`).join('');}
+function drawDistricts(data){const rows=data.filter(x=>x.name!=='Belum Terpetakan').sort((a,b)=>b.participants-a.participants);$('districtBars').innerHTML=rows.length?rows.map(x=>`<div><div class="district-top"><b>${esc(x.name)}</b><span>${fmt(x.participants)} peserta · ${x.completion}%</span></div><div class="track"><div class="fill" style="width:${Math.max(0,Math.min(100,x.completion))}%;background:#159a83"></div></div></div>`).join(''):'<div class="empty">Belum ada data kecamatan.</div>';}
+function drawTable(data){$('courseTable').innerHTML=data.map(c=>`<tr><td>${esc(c.course_name)}</td><td><span class="status ${c.uploaded?'':'off'}">${c.uploaded?'Sudah diunggah':'Belum diunggah'}</span></td><td class="num">${c.uploaded?fmt(c.profile_count):'—'}</td><td class="num">${c.uploaded?fmt(c.completed)+' / '+fmt(c.total):'—'}</td><td class="num">${c.uploaded?c.completion+'%':'—'}</td></tr>`).join('');}
+function populateFilters(){const selected=$('courseFilter').value;$('courseFilter').innerHTML='<option value="">Semua pelatihan</option>'+courses.map(c=>`<option value="${esc(c.course_key)}">${esc(c.course_name)}</option>`).join('');$('courseFilter').value=selected;const names=[...new Set(groups.map(g=>g.name))].filter(x=>x!=='Belum Terpetakan').sort((a,b)=>a.localeCompare(b,'id'));const ds=$('districtFilter').value;$('districtFilter').innerHTML='<option value="">Semua kecamatan</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');$('districtFilter').value=ds;}
+async function refresh(){try{const course=$('courseFilter').value;const [o,c,g]=await Promise.all([get('/api/public/overview'),get('/api/public/courses'),get('/api/public/groups'+(course?'?course='+encodeURIComponent(course):''))]);overview=o.metrics;courses=c.courses||[];groups=g.groups||[];populateFilters();const district=$('districtFilter').value;const visibleGroups=district?groups.filter(x=>x.name===district):groups;setText('mParticipants',fmt(overview.participants));setText('mCourses',overview.courses+' / '+overview.totalCourses);setText('mDistricts',fmt(overview.districts));setText('mCompletion',overview.completion+'%');setText('mActivity',fmt(overview.completed)+' dari '+fmt(overview.total)+' aktivitas selesai');drawDonut(overview);drawPie(visibleGroups);drawCourses(courses);drawDistricts(visibleGroups);drawTable(courses);setText('updated','Pembaruan data: '+(o.lastSync?.created_at?new Date(o.lastSync.created_at*1000).toLocaleString('id-ID'):'belum tersedia'));}catch(e){$('courseTable').innerHTML=`<tr><td colspan="5" class="empty">${esc(e.message)} Pastikan API publik sudah dipasang.</td></tr>`;$('courseBars').innerHTML=`<div class="empty">${esc(e.message)}</div>`;$('districtBars').innerHTML=`<div class="empty">${esc(e.message)}</div>`;setText('updated','Data belum dapat dimuat');}}
+$('courseFilter').addEventListener('change',refresh);
+$('districtFilter').addEventListener('change',()=>{const d=$('districtFilter').value;const visible=d?groups.filter(x=>x.name===d):groups;drawPie(visible);drawDistricts(visible);});
+refresh();
+</script>
+</body></html>
