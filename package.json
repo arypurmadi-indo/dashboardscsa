@@ -1,0 +1,11 @@
+{
+  "name": "scsa-monitoring-dashboard",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public --project-name scsa-monitoring-dashboard",
+    "db:migrate": "wrangler d1 migrations apply scsa-monitoring-db --remote"
+  },
+  "devDependencies": { "wrangler": "^4.0.0" }
+}
