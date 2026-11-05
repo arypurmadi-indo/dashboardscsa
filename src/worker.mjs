@@ -22,6 +22,7 @@ async function hash(p, s) {
   const k = await crypto.subtle.importKey(
     "raw", e.encode(p), "PBKDF2", false, ["deriveBits"]
   );
+
   const b = await crypto.subtle.deriveBits({
     name: "PBKDF2",
     salt: e.encode(s),
@@ -30,20 +31,25 @@ async function hash(p, s) {
   }, k, 256);
 
   return [...new Uint8Array(b)]
-    .map(x => x.toString(16).padStart(2, "0")).join("");
+    .map(x => x.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 async function sha(x) {
   const b = await crypto.subtle.digest(
-    "SHA-256", new TextEncoder().encode(x)
+    "SHA-256",
+    new TextEncoder().encode(x)
   );
+
   return [...new Uint8Array(b)]
-    .map(x => x.toString(16).padStart(2, "0")).join("");
+    .map(x => x.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 async function current(req, env) {
   const c = req.headers.get("Cookie") || "";
   const t = c.match(/scsa_session=([^;]+)/)?.[1];
+
   if (!t) return null;
 
   return await env.DB.prepare(
@@ -58,6 +64,10 @@ async function role(req, env) {
   const u = await current(req, env);
   return u && u.role === "manager" ? u : null;
 }
+
+/* =========================================
+   DAFTAR 13 COURSE SCSA
+========================================= */
 
 const COURSE_LIST = [
   ["intuisi-bilangan", "Intuisi Bilangan"],
@@ -75,15 +85,22 @@ const COURSE_LIST = [
   ["representasi-matematis", "Representasi Matematis"]
 ];
 
+/* =========================================
+   PEMBACA CSV
+========================================= */
+
 function csvRows(text) {
   const input = String(text ?? "").replace(/^\uFEFF/, "");
   const first = input.split(/\r?\n/, 1)[0] || "";
+
   const delim =
     (first.match(/;/g) || []).length >
     (first.match(/,/g) || []).length ? ";" : ",";
 
   const rows = [];
-  let row = [], field = "", quoted = false;
+  let row = [];
+  let field = "";
+  let quoted = false;
 
   for (let i = 0; i < input.length; i++) {
     const c = input[i];
@@ -104,7 +121,11 @@ function csvRows(text) {
       field = "";
     } else if (c === "\n") {
       row.push(field.replace(/\r$/, ""));
-      if (row.some(v => v.trim() !== "")) rows.push(row);
+
+      if (row.some(v => v.trim() !== "")) {
+        rows.push(row);
+      }
+
       row = [];
       field = "";
     } else {
@@ -113,7 +134,10 @@ function csvRows(text) {
   }
 
   row.push(field.replace(/\r$/, ""));
-  if (row.some(v => v.trim() !== "")) rows.push(row);
+
+  if (row.some(v => v.trim() !== "")) {
+    rows.push(row);
+  }
 
   return rows;
 }
@@ -124,20 +148,32 @@ const key = s => String(s ?? "")
   .toLowerCase()
   .replace(/\s+/g, " ");
 
+/* =========================================
+   PARSER PROFIL PESERTA
+========================================= */
+
 function parseProfile(text) {
   const rows = csvRows(text);
 
   if (rows.length < 2) {
-    throw new Error("CSV profil kosong atau tidak memiliki baris peserta.");
+    throw new Error(
+      "CSV profil kosong atau tidak memiliki baris peserta."
+    );
   }
 
   const h = rows[0].map(key);
+
   const ixEmail = h.indexOf("email address");
   const ixFirst = h.indexOf("first name");
   const ixLast = h.indexOf("last name");
   const ixGroup = h.indexOf("groups");
 
-  if (ixEmail < 0 || ixFirst < 0 || ixLast < 0 || ixGroup < 0) {
+  if (
+    ixEmail < 0 ||
+    ixFirst < 0 ||
+    ixLast < 0 ||
+    ixGroup < 0
+  ) {
     throw new Error(
       "Kolom CSV profil tidak sesuai. Wajib ada: First name, Last name, Email address, Groups."
     );
@@ -148,6 +184,7 @@ function parseProfile(text) {
   for (let n = 1; n < rows.length; n++) {
     const r = rows[n];
     const email = norm(r[ixEmail]).toLowerCase();
+
     if (!email) continue;
 
     const fullname = [
@@ -159,55 +196,83 @@ function parseProfile(text) {
     const old = people.get(email);
 
     if (!old) {
-      people.set(email, { email, fullname, group });
+      people.set(email, {
+        email,
+        fullname,
+        group
+      });
     } else {
       if (!old.group && group) {
         old.group = group;
-        if (fullname) old.fullname = fullname;
-      } else if ((!old.fullname || old.fullname === "-") && fullname) {
+
+        if (fullname) {
+          old.fullname = fullname;
+        }
+      } else if (
+        (!old.fullname || old.fullname === "-") &&
+        fullname
+      ) {
         old.fullname = fullname;
       }
     }
   }
 
   if (!people.size) {
-    throw new Error("Tidak ada email peserta yang valid pada CSV profil.");
+    throw new Error(
+      "Tidak ada email peserta yang valid pada CSV profil."
+    );
   }
 
   return [...people.values()];
 }
 
+/* =========================================
+   PARSER PROGRESS AKTIVITAS
+========================================= */
+
 function parseProgress(text) {
   const rows = csvRows(text);
 
   if (rows.length < 2) {
-    throw new Error("CSV progress kosong atau tidak memiliki baris peserta.");
+    throw new Error(
+      "CSV progress kosong atau tidak memiliki baris peserta."
+    );
   }
 
   const h = rows[0].map(x => norm(x));
-  const emailIx = h.findIndex(x => key(x) === "email address");
+
+  const emailIx = h.findIndex(
+    x => key(x) === "email address"
+  );
 
   if (emailIx < 0) {
-    throw new Error("Kolom Email address tidak ditemukan pada CSV progress.");
+    throw new Error(
+      "Kolom Email address tidak ditemukan pada CSV progress."
+    );
   }
 
   const activityCols = [];
 
   for (let i = emailIx + 1; i < h.length; i++) {
     const name = norm(h[i]);
+
     if (!name) continue;
 
-    const next = i + 1 < h.length ? norm(h[i + 1]) : "";
+    const next =
+      i + 1 < h.length ? norm(h[i + 1]) : "";
 
     activityCols.push({
       index: i,
       name,
-      completedAtIndex: next === "" && i + 1 < h.length ? i + 1 : -1
+      completedAtIndex:
+        next === "" && i + 1 < h.length ? i + 1 : -1
     });
   }
 
   if (!activityCols.length) {
-    throw new Error("Tidak ditemukan kolom aktivitas setelah Email address.");
+    throw new Error(
+      "Tidak ditemukan kolom aktivitas setelah Email address."
+    );
   }
 
   const byEmail = new Map();
@@ -215,6 +280,7 @@ function parseProgress(text) {
   for (let n = 1; n < rows.length; n++) {
     const r = rows[n];
     const email = norm(r[emailIx]).toLowerCase();
+
     if (!email) continue;
 
     let items = byEmail.get(email);
@@ -225,9 +291,13 @@ function parseProgress(text) {
     }
 
     for (const c of activityCols) {
-      const status = norm(r[c.index]) || "Not completed";
+      const status =
+        norm(r[c.index]) || "Not completed";
+
       const completed_at =
-        c.completedAtIndex >= 0 ? norm(r[c.completedAtIndex]) : "";
+        c.completedAtIndex >= 0
+          ? norm(r[c.completedAtIndex])
+          : "";
 
       items.set(c.name, {
         activity: c.name,
@@ -241,19 +311,38 @@ function parseProgress(text) {
 
   for (const [email, m] of byEmail) {
     for (const item of m.values()) {
-      out.push({ email, ...item });
+      out.push({
+        email,
+        ...item
+      });
     }
   }
 
   return out;
 }
 
-async function insertChunks(db, items, makeStmt, chunkSize = 80) {
+/* =========================================
+   SIMPAN DATA DALAM BATCH
+========================================= */
+
+async function insertChunks(
+  db,
+  items,
+  makeStmt,
+  chunkSize = 80
+) {
   for (let i = 0; i < items.length; i += chunkSize) {
     const batch = items.slice(i, i + chunkSize);
-    await db.batch(batch.map(makeStmt));
+
+    await db.batch(
+      batch.map(makeStmt)
+    );
   }
 }
+
+/* =========================================
+   API UTAMA SCSA
+========================================= */
 
 export default {
   async fetch(req, env) {
@@ -264,6 +353,9 @@ export default {
     const path = new URL(req.url).pathname;
 
     try {
+
+      /* HEALTH CHECK */
+
       if (path === "/api/health") {
         return json({
           ok: true,
@@ -272,8 +364,14 @@ export default {
         });
       }
 
-      if (path === "/api/auth/login" && req.method === "POST") {
+      /* LOGIN */
+
+      if (
+        path === "/api/auth/login" &&
+        req.method === "POST"
+      ) {
         const b = await req.json();
+
         const id = norm(b.identity).toLowerCase();
         const pw = String(b.password || "");
 
@@ -287,10 +385,14 @@ export default {
           u.status !== "active" ||
           await hash(pw, u.password_salt) !== u.password_hash
         ) {
-          return fail("Username/email atau password tidak valid.", 401);
+          return fail(
+            "Username/email atau password tidak valid.",
+            401
+          );
         }
 
-        const t = crypto.randomUUID() + crypto.randomUUID();
+        const t =
+          crypto.randomUUID() + crypto.randomUUID();
 
         await env.DB.prepare(
           "INSERT INTO sessions(id,user_id,token_hash,expires_at,created_at) VALUES(?,?,?,?,?)"
@@ -302,43 +404,67 @@ export default {
           now()
         ).run();
 
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: {
-            "Content-Type": "application/json",
-            "Set-Cookie": setCookie(t, 43200),
-            ...cors
+        return new Response(
+          JSON.stringify({ ok: true }),
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "Set-Cookie": setCookie(t, 43200),
+              ...cors
+            }
           }
-        });
+        );
       }
 
-      if (path === "/api/auth/logout" && req.method === "POST") {
+      /* LOGOUT */
+
+      if (
+        path === "/api/auth/logout" &&
+        req.method === "POST"
+      ) {
         const c = req.headers.get("Cookie") || "";
         const t = c.match(/scsa_session=([^;]+)/)?.[1];
 
         if (t) {
           await env.DB.prepare(
             "DELETE FROM sessions WHERE token_hash=?"
-          ).bind(await sha(decodeURIComponent(t))).run();
+          ).bind(
+            await sha(decodeURIComponent(t))
+          ).run();
         }
 
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: {
-            "Content-Type": "application/json",
-            "Set-Cookie": setCookie("", 0),
-            ...cors
+        return new Response(
+          JSON.stringify({ ok: true }),
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "Set-Cookie": setCookie("", 0),
+              ...cors
+            }
           }
-        });
+        );
       }
+
+      /* CEK SESSION */
 
       if (path === "/api/auth/me") {
         const u = await current(req, env);
-        return u ? json({ user: u }) : fail("Belum login.", 401);
+
+        return u
+          ? json({ user: u })
+          : fail("Belum login.", 401);
       }
 
-      if (path === "/api/manager/bootstrap" && req.method === "POST") {
+      /* BOOTSTRAP MANAGER */
+
+      if (
+        path === "/api/manager/bootstrap" &&
+        req.method === "POST"
+      ) {
         if (
           !env.BOOTSTRAP_SECRET ||
-          req.headers.get("X-Bootstrap-Secret") !== env.BOOTSTRAP_SECRET
+          req.headers.get("X-Bootstrap-Secret") !==
+            env.BOOTSTRAP_SECRET
         ) {
           return fail("Tidak diizinkan.", 403);
         }
@@ -352,7 +478,9 @@ export default {
           !b.password ||
           String(b.password).length < 12
         ) {
-          return fail("Lengkapi data. Password minimal 12 karakter.");
+          return fail(
+            "Lengkapi data. Password minimal 12 karakter."
+          );
         }
 
         const id = crypto.randomUUID();
@@ -363,10 +491,18 @@ export default {
           await env.DB.prepare(
             "INSERT INTO users(id,name,email,username,password_salt,password_hash,role,status,created_at) VALUES(?,?,?,?,?,?,'manager','active',?)"
           ).bind(
-            id, b.name, b.email, b.username, salt, ph, now()
+            id,
+            b.name,
+            b.email,
+            b.username,
+            salt,
+            ph,
+            now()
           ).run();
         } catch {
-          return fail("Email atau username sudah digunakan.");
+          return fail(
+            "Email atau username sudah digunakan."
+          );
         }
 
         return json({
@@ -375,11 +511,18 @@ export default {
         });
       }
 
+      /* OTORISASI MANAGER */
+
       const u = await role(req, env);
 
       if (!u) {
-        return fail("Akses hanya untuk akun Manager Dashboard.", 403);
+        return fail(
+          "Akses hanya untuk akun Manager Dashboard.",
+          403
+        );
       }
+
+      /* DAFTAR COURSE */
 
       if (path === "/api/courses") {
         const out = [];
@@ -389,23 +532,45 @@ export default {
             "SELECT id,uploaded_at,profile_count,progress_count,matched_count,unmatched_count,status FROM import_batches WHERE course_key=? ORDER BY uploaded_at DESC LIMIT 1"
           ).bind(course_key).first();
 
-          out.push({ course_key, name, ...(b || {}) });
+          out.push({
+            course_key,
+            name,
+            ...(b || {})
+          });
         }
 
         return json({ courses: out });
       }
 
-      if (path === "/api/import" && req.method === "POST") {
+      /* IMPORT CSV */
+
+      if (
+        path === "/api/import" &&
+        req.method === "POST"
+      ) {
         const form = await req.formData();
-        const course_key = String(form.get("course_key") || "");
+
+        const course_key =
+          String(form.get("course_key") || "");
+
         const profile = form.get("profile");
         const progress = form.get("progress");
-        const course = COURSE_LIST.find(x => x[0] === course_key);
 
-        if (!course) return fail("Course tidak dikenali.");
+        const course = COURSE_LIST.find(
+          x => x[0] === course_key
+        );
 
-        if (!(profile instanceof File) || !(progress instanceof File)) {
-          return fail("Unggah kedua file: profil peserta dan progress.");
+        if (!course) {
+          return fail("Course tidak dikenali.");
+        }
+
+        if (
+          !(profile instanceof File) ||
+          !(progress instanceof File)
+        ) {
+          return fail(
+            "Unggah kedua file: profil peserta dan progress."
+          );
         }
 
         if (
@@ -417,21 +582,37 @@ export default {
           );
         }
 
-        const people = parseProfile(await profile.text());
-        const activities = parseProgress(await progress.text());
-
-        const emails = new Set(people.map(x => x.email));
-        const matched = new Set(
-          activities.filter(x => emails.has(x.email)).map(x => x.email)
+        const people = parseProfile(
+          await profile.text()
         );
+
+        const activities = parseProgress(
+          await progress.text()
+        );
+
+        const emails = new Set(
+          people.map(x => x.email)
+        );
+
+        const matched = new Set(
+          activities
+            .filter(x => emails.has(x.email))
+            .map(x => x.email)
+        );
+
         const unmatched = new Set(
-          activities.filter(x => !emails.has(x.email)).map(x => x.email)
+          activities
+            .filter(x => !emails.has(x.email))
+            .map(x => x.email)
         );
 
         const grouped = new Map();
 
         for (const a of activities) {
-          if (!grouped.has(a.email)) grouped.set(a.email, []);
+          if (!grouped.has(a.email)) {
+            grouped.set(a.email, []);
+          }
+
           grouped.get(a.email).push(a);
         }
 
@@ -459,15 +640,24 @@ export default {
           people,
           x => env.DB.prepare(
             "INSERT INTO imported_participants(batch_id,email,fullname,group_name) VALUES(?,?,?,?)"
-          ).bind(batch, x.email, x.fullname, x.group)
+          ).bind(
+            batch,
+            x.email,
+            x.fullname,
+            x.group
+          )
         );
 
-        const progressRows = [...grouped].map(([email, items]) => ({
-          email,
-          items,
-          total: items.length,
-          completed: items.filter(x => /^completed/i.test(x.status)).length
-        }));
+        const progressRows = [...grouped].map(
+          ([email, items]) => ({
+            email,
+            items,
+            total: items.length,
+            completed: items.filter(
+              x => /^completed/i.test(x.status)
+            ).length
+          })
+        );
 
         await insertChunks(
           env.DB,
@@ -500,20 +690,29 @@ export default {
           progress_count: activities.length,
           matched_count: matched.size,
           unmatched_count: unmatched.size,
-          unmapped_count: people.filter(x => !x.group).length,
-          message: `Data ${course[1]} berhasil diimpor. ${people.length} profil dan ${activities.length} status aktivitas.`
+          unmapped_count: people.filter(
+            x => !x.group
+          ).length,
+          message:
+            `Data ${course[1]} berhasil diimpor. ${people.length} profil dan ${activities.length} status aktivitas.`
         });
       }
+
+      /* DASHBOARD RINGKASAN */
 
       if (path === "/api/dashboard/overview") {
         const latest = await env.DB.prepare(
           "SELECT b.* FROM import_batches b JOIN (SELECT course_key,MAX(uploaded_at) t FROM import_batches GROUP BY course_key) x ON x.course_key=b.course_key AND x.t=b.uploaded_at"
         ).all();
 
-        const batches = (latest.results || []).map(x => x.id);
+        const batches = (latest.results || [])
+          .map(x => x.id);
+
         let participants = new Set();
         let groups = new Map();
-        let total = 0, done = 0, uploaded = 0;
+        let total = 0;
+        let done = 0;
+        let uploaded = 0;
 
         for (const id of batches) {
           const ps = await env.DB.prepare(
@@ -522,8 +721,14 @@ export default {
 
           for (const p of ps.results || []) {
             participants.add(p.email);
-            const g = p.group_name || "Belum Terpetakan";
-            groups.set(g, (groups.get(g) || 0) + 1);
+
+            const g =
+              p.group_name || "Belum Terpetakan";
+
+            groups.set(
+              g,
+              (groups.get(g) || 0) + 1
+            );
           }
 
           const ac = await env.DB.prepare(
@@ -539,19 +744,29 @@ export default {
           metrics: {
             participants: participants.size,
             courses: uploaded,
-            completion: total ? Math.round(done * 100 / total) : 0,
+            completion: total
+              ? Math.round(done * 100 / total)
+              : 0,
             completed: done,
             total
           },
-          districts: [...groups].map(([name, count]) => ({
-            name,
-            participants: count
-          })).sort((a, b) => a.name.localeCompare(b.name)),
+
+          districts: [...groups].map(
+            ([name, count]) => ({
+              name,
+              participants: count
+            })
+          ).sort(
+            (a, b) => a.name.localeCompare(b.name)
+          ),
+
           lastSync: await env.DB.prepare(
             "SELECT created_at,message FROM sync_logs WHERE source='csv-import' ORDER BY created_at DESC LIMIT 1"
           ).first()
         });
       }
+
+      /* DASHBOARD PER COURSE */
 
       if (path === "/api/dashboard/courses") {
         const d = await env.DB.prepare(
@@ -559,7 +774,9 @@ export default {
         ).all();
 
         const latest = new Map(
-          (d.results || []).map(x => [x.course_key, x])
+          (d.results || []).map(
+            x => [x.course_key, x]
+          )
         );
 
         const out = [];
@@ -578,6 +795,7 @@ export default {
               completed: 0,
               completion: 0
             });
+
             continue;
           }
 
@@ -591,13 +809,17 @@ export default {
             total: a.total || 0,
             completed: a.completed || 0,
             completion: a.total
-              ? Math.round(a.completed * 100 / a.total)
+              ? Math.round(
+                  a.completed * 100 / a.total
+                )
               : 0
           });
         }
 
         return json({ courses: out });
       }
+
+      /* DASHBOARD PER KABUPATEN / GROUP */
 
       if (path === "/api/dashboard/groups") {
         const d = await env.DB.prepare(
@@ -607,26 +829,36 @@ export default {
         return json({
           groups: (d.results || []).map(x => ({
             ...x,
-            district: x.group_name || "Belum Terpetakan",
+            district:
+              x.group_name || "Belum Terpetakan",
             completion: x.total
-              ? Math.round(x.completed * 100 / x.total)
+              ? Math.round(
+                  x.completed * 100 / x.total
+                )
               : 0
           }))
         });
       }
+
+      /* RIWAYAT UPLOAD */
 
       if (path === "/api/dashboard/history") {
         const d = await env.DB.prepare(
           "SELECT id,course_name,uploaded_at,profile_count,progress_count,matched_count,unmatched_count,status,profile_filename,progress_filename FROM import_batches ORDER BY uploaded_at DESC LIMIT 100"
         ).all();
 
-        return json({ history: d.results || [] });
+        return json({
+          history: d.results || []
+        });
       }
 
       return fail("Endpoint tidak ditemukan.", 404);
 
     } catch (e) {
-      return fail(e.message || "Terjadi kesalahan server.", 500);
+      return fail(
+        e.message || "Terjadi kesalahan server.",
+        500
+      );
     }
   }
 };
