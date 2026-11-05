@@ -620,6 +620,34 @@ export default {
         );
       }
 
+      /* DIAGNOSTIK D1: MEMBANDINGKAN READ DEFAULT DAN PRIMARY
+         Endpoint ini hanya untuk Manager dan tidak mengirim data pribadi.
+      */
+      if (path === "/api/manager/diagnostic-batch" && req.method === "GET") {
+        const targetId = "de8073e2-19bd-41d8-8c06-c82438eb1813";
+
+        const defaultBatch = await env.DB.prepare(
+          "SELECT id,course_key,course_name,uploaded_at,profile_count,progress_count FROM import_batches WHERE id=?"
+        ).bind(targetId).first();
+
+        const primary = env.DB.withSession("first-primary");
+        const primaryBatch = await primary.prepare(
+          "SELECT id,course_key,course_name,uploaded_at,profile_count,progress_count FROM import_batches WHERE id=?"
+        ).bind(targetId).first();
+
+        const primaryCounts = await primary.prepare(
+          "SELECT (SELECT COUNT(*) FROM import_batches WHERE course_key='intuisi-bilangan') AS batch_count, (SELECT COUNT(*) FROM imported_participants WHERE batch_id=?) AS participant_count, (SELECT COUNT(*) FROM imported_progress WHERE batch_id=?) AS progress_count"
+        ).bind(targetId, targetId).first();
+
+        return json({
+          diagnostic: "D1 read consistency",
+          default_read: defaultBatch || null,
+          primary_read: primaryBatch || null,
+          primary_counts: primaryCounts || null,
+          checked_at: new Date().toISOString()
+        });
+      }
+
       /* DAFTAR COURSE */
 
       if (path === "/api/courses") {
