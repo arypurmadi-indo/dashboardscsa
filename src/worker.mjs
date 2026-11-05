@@ -1,11 +1,41 @@
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"Content-Type","Access-Control-Allow-Methods":"GET,POST,OPTIONS"};
 const json=(d,s=200)=>new Response(JSON.stringify(d),{status:s,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...cors}});
 const fail=(m,s=400)=>json({error:m},s),now=()=>Math.floor(Date.now()/1000),norm=x=>String(x??"").trim();
-async function hash(p,s){const e=new TextEncoder(),k=await crypto.subtle.importKey("raw",e.encode(p),"PBKDF2",false,["deriveBits"]),b=await crypto.subtle.deriveBits({name:"PBKDF2",salt:e.encode(s),iterations:210000,hash:"SHA-256"},k,256);return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+async function hash(p,s){const e=new TextEncoder(),k=await crypto.subtle.importKey("raw",e.encode(p),"PBKDF2",false,["deriveBits"]),b=await crypto.subtle.deriveBits({name:"PBKDF2",salt:e.encode(s),iterations:100000,hash:"SHA-256"},k,256);return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
 async function sha(x){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(x));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
 async function current(req,env){const c=req.headers.get("Cookie")||"",t=c.match(/scsa_session=([^;]+)/)?.[1];if(!t)return null;return await env.DB.prepare("SELECT u.id,u.name,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.status='active'").bind(await sha(decodeURIComponent(t)),now()).first()}
 const setCookie=(v,a)=>`scsa_session=${encodeURIComponent(v)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${a}`;
 async function role(req,env){const u=await current(req,env);return u&&u.role==="manager"?u:null}
+
+const COURSE_LIST=[
+['intuisi-bilangan','Intuisi Bilangan'],['koneksi','Koneksi'],['nilai-tempat-makna-bilangan','Nilai Tempat dan Makna Bilangan'],['pecahan','Pecahan'],['pedagogi-pembelajaran-matematika','Pedagogi Pembelajaran Matematika'],['pembelajaran-matematika-bermakna','Pembelajaran Matematika Bermakna'],['pemecahan-masalah','Pemecahan Masalah'],['penalaran-pembuktian','Penalaran dan Pembuktian'],['pengenalan-elemen-proses-matematika','Pengenalan Elemen Proses Matematika'],['penjumlahan-pengurangan','Penjumlahan dan Pengurangan'],['perkalian-pembagian','Perkalian dan Pembagian'],['pola-dasar-penalaran-matematis','Pola sebagai Dasar Penalaran Matematis'],['representasi-matematis','Representasi Matematis']
+];
+function csvRows(text){
+ const input=String(text??'').replace(/^\uFEFF/,'');
+ const first=(input.split(/\r?\n/,1)[0]||'');
+ const delim=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';
+ const rows=[];let row=[],field='',quoted=false;
+ for(let i=0;i<input.length;i++){const c=input[i];if(quoted){if(c==='"'&&input[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c;}else if(c==='"')quoted=true;else if(c===delim){row.push(field);field='';}else if(c==='\n'){row.push(field.replace(/\r$/,''));if(row.some(v=>v.trim()!==''))rows.push(row);row=[];field='';}else field+=c;}
+ row.push(field.replace(/\r$/,''));if(row.some(v=>v.trim()!==''))rows.push(row);return rows;
+}
+const key=s=>String(s??'').replace(/^\uFEFF/,'').trim().toLowerCase().replace(/\s+/g,' ');
+function parseProfile(text){
+ const rows=csvRows(text);if(rows.length<2)throw new Error('CSV profil kosong atau tidak memiliki baris peserta.');
+ const h=rows[0].map(key),ixEmail=h.indexOf('email address'),ixFirst=h.indexOf('first name'),ixLast=h.indexOf('last name'),ixGroup=h.indexOf('groups');
+ if(ixEmail<0||ixFirst<0||ixLast<0||ixGroup<0)throw new Error('Kolom CSV profil tidak sesuai. Wajib ada: First name, Last name, Email address, Groups.');
+ const people=new Map();for(let n=1;n<rows.length;n++){const r=rows[n],email=norm(r[ixEmail]).toLowerCase();if(!email)continue;const fullname=[norm(r[ixFirst]),norm(r[ixLast])].filter(x=>x&&x!=='-').join(' ').trim(),group=norm(r[ixGroup]);const old=people.get(email);if(!old)people.set(email,{email,fullname,group});else{if(!old.group&&group){old.group=group;if(fullname)old.fullname=fullname;}else if((!old.fullname||old.fullname==='-')&&fullname)old.fullname=fullname;}}
+ if(!people.size)throw new Error('Tidak ada email peserta yang valid pada CSV profil.');return [...people.values()];
+}
+function parseProgress(text){
+ const rows=csvRows(text);if(rows.length<2)throw new Error('CSV progress kosong atau tidak memiliki baris peserta.');
+ const h=rows[0].map(x=>norm(x)),emailIx=h.findIndex(x=>key(x)==='email address');if(emailIx<0)throw new Error('Kolom Email address tidak ditemukan pada CSV progress.');
+ const activityCols=[];for(let i=emailIx+1;i<h.length;i++){const name=norm(h[i]);if(!name)continue;const next=i+1<h.length?norm(h[i+1]):'';activityCols.push({index:i,name,completedAtIndex:next===''&&i+1<h.length?i+1:-1});}
+ if(!activityCols.length)throw new Error('Tidak ditemukan kolom aktivitas setelah Email address.');
+ const byEmail=new Map();for(let n=1;n<rows.length;n++){const r=rows[n],email=norm(r[emailIx]).toLowerCase();if(!email)continue;let items=byEmail.get(email);if(!items){items=new Map();byEmail.set(email,items)}for(const c of activityCols){const status=norm(r[c.index])||'Not completed',completed_at=c.completedAtIndex>=0?norm(r[c.completedAtIndex]):'';items.set(c.name,{activity:c.name,status,completed_at});}}
+ const out=[];for(const [email,m] of byEmail){for(const item of m.values())out.push({email,...item});}return out;
+}
+async function insertChunks(db,items,makeStmt,chunkSize=80){for(let i=0;i<items.length;i+=chunkSize){const batch=items.slice(i,i+chunkSize);await db.batch(batch.map(makeStmt));}}
+
 export default {async fetch(req,env){if(req.method==='OPTIONS')return new Response(null,{headers:cors});const path=new URL(req.url).pathname;
 try{
 if(path==='/api/health')return json({ok:true,product:'SCSA Monitoring Dashboard CSV'});
