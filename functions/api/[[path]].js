@@ -1,4 +1,4 @@
-import worker from "../../src/worker.js";
+import worker from "../../src/worker.mjs";
 
 // Cloudflare Pages Functions adapter for /api/* requests.
 export async function onRequest(context) {
