@@ -8,7 +8,7 @@ const setCookie=(v,a)=>`scsa_session=${encodeURIComponent(v)}; Path=/; HttpOnly;
 async function role(req,env){const u=await current(req,env);return u&&u.role==="manager"?u:null}
 export default {async fetch(req,env){if(req.method==='OPTIONS')return new Response(null,{headers:cors});const path=new URL(req.url).pathname;
 try{
-if(path==='/api/health')return json({ok:true,product:'SCSA Monitoring Dashboard CSV'});
+if(path==='/api/health')return json({ok:true,product:'SCSA Monitoring Dashboard CSV',build:'PBKDF2-100000-TEST'});
 if(path==='/api/auth/login'&&req.method==='POST'){const b=await req.json(),id=norm(b.identity).toLowerCase(),pw=String(b.password||'');const u=await env.DB.prepare('SELECT * FROM users WHERE lower(email)=? OR lower(username)=?').bind(id,id).first();if(!u||u.role!=='manager'||u.status!=='active'||await hash(pw,u.password_salt)!==u.password_hash)return fail('Username/email atau password tidak valid.',401);const t=crypto.randomUUID()+crypto.randomUUID();await env.DB.prepare('INSERT INTO sessions(id,user_id,token_hash,expires_at,created_at) VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),u.id,await sha(t),now()+43200,now()).run();return new Response(JSON.stringify({ok:true}),{headers:{'Content-Type':'application/json','Set-Cookie':setCookie(t,43200),...cors}})}
 if(path==='/api/auth/logout'&&req.method==='POST'){const c=req.headers.get('Cookie')||'',t=c.match(/scsa_session=([^;]+)/)?.[1];if(t)await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await sha(decodeURIComponent(t))).run();return new Response(JSON.stringify({ok:true}),{headers:{'Content-Type':'application/json','Set-Cookie':setCookie('',0),...cors}})}
 if(path==='/api/auth/me'){const u=await current(req,env);return u?json({user:u}):fail('Belum login.',401)}
